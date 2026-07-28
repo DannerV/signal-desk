@@ -144,6 +144,45 @@ no_atr = evaluate(CFG, snap(105, 104, atr14=0), RISK, MIDDAY)["ticket"]
 check("no ATR -> falls back to invalidation, refuses on R:R",
       not no_atr["valid"] and "invalidation" in no_atr["reason"], no_atr)
 
+print("\naccount awareness")
+SMALL = {"total_value": 500.0, "buying_power": 500.0, "positions": [], "age_hours": 0.2}
+BIG = {"total_value": 50000.0, "buying_power": 50000.0, "positions": [], "age_hours": 1.0}
+
+# 2% of $500 = $10 budget; risk/share 4.0 -> 2 shares, affordable at $105
+small_t = evaluate(CFG, snap(105, 104), RISK, MIDDAY, acct=SMALL)["ticket"]
+check("risk is 2pct of account, not the flat $250", small_t["shares"] == 2,
+      small_t.get("shares"))
+check("budget note explains the sizing", "2% of $500" in small_t["budget_note"],
+      small_t.get("budget_note"))
+
+# 2% of $50k = $1000, but the flat $250 is a CAP - the smaller wins, so 62 shares.
+big_t = evaluate(CFG, snap(105, 104), RISK, MIDDAY, acct=BIG)["ticket"]
+check("flat budget caps the percentage", big_t["shares"] == 62, big_t.get("shares"))
+check("cap is explained", "flat cap" in big_t["budget_note"], big_t.get("budget_note"))
+
+# buying power caps a ticket the budget alone would oversize
+BROKE = {"total_value": 50000.0, "buying_power": 300.0, "positions": [], "age_hours": 0.1}
+capped = evaluate(CFG, snap(105, 104), RISK, MIDDAY, acct=BROKE)["ticket"]
+check("buying power caps share count", capped["shares"] == 2, capped.get("shares"))
+check("cap is disclosed", "buying power" in capped["size_note"], capped.get("size_note"))
+
+TINY = {"total_value": 50.0, "buying_power": 50.0, "positions": [], "age_hours": 0.1}
+tiny = evaluate(CFG, snap(105, 104), RISK, MIDDAY, acct=TINY)["ticket"]
+check("cannot afford one share -> refusal", not tiny["valid"], tiny)
+
+HELD = {"total_value": 20000.0, "buying_power": 20000.0, "age_hours": 2.0,
+        "positions": [{"symbol": "TEST", "quantity": 40, "average_buy_price": "95.00"}]}
+held_t = evaluate(CFG, snap(105, 104), RISK, MIDDAY, acct=HELD)["ticket"]
+notes = " ".join(held_t["position_notes"])
+check("existing holding surfaced", "already holding 40 shares" in notes, notes)
+check("unrealized pnl shown", "+10.5%" in notes, notes)
+check("concentration flagged", "CONCENTRATION" in notes, notes)
+check("snapshot age disclosed", "2h old" in notes, notes)
+
+no_acct = evaluate(CFG, snap(105, 104), RISK, MIDDAY)["ticket"]
+check("no snapshot -> flat budget, disclosed",
+      "no account snapshot" in no_acct["budget_note"], no_acct.get("budget_note"))
+
 print("\nBROKEN never sizes an order")
 b = evaluate(CFG, snap(88, 91), RISK, MIDDAY)["ticket"]
 check("exit is review-only", b["kind"] == "REVIEW_STOP" and "shares" not in b)

@@ -22,7 +22,7 @@ import sys
 from typing import Dict, List
 
 import render
-from lib import notify, store
+from lib import account, notify, store
 from lib.clock import fmt_local, in_quiet_hours, is_market_open, now_local
 from lib.data import fetch
 from lib.engine import ALERTING_STATES, evaluate
@@ -51,12 +51,19 @@ def main() -> int:
 
     snapshots = fetch(symbols)
     state = store.load()
+    acct = account.load()
+    if acct:
+        log.info("account snapshot loaded: $%s value, $%s buying power, %s position(s), %sh old",
+                 acct.get("total_value"), acct.get("buying_power"),
+                 len(acct.get("positions", [])), acct.get("age_hours"))
+    else:
+        log.info("no account snapshot - sizing off the flat risk budget")
 
     results: List[Dict] = []
     alerts: List[Dict] = []
 
     for cfg in tickers:
-        result = evaluate(cfg, snapshots.get(cfg["symbol"]), risk)
+        result = evaluate(cfg, snapshots.get(cfg["symbol"]), risk, acct=acct)
         results.append(result)
 
         symbol = result["symbol"]

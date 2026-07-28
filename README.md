@@ -55,6 +55,24 @@ Every ticket carries an **expiry and a price band**. A ticket computed at
 10:05 during a fast move is garbage by 10:25. Outside its band it voids and
 the engine re-evaluates.
 
+## Account awareness (optional)
+
+The CI job cannot reach a broker, so position data arrives as a *snapshot*
+Claude reads in-session. It never enters git — this repo is public.
+
+- local runs read `account.local.json` (gitignored)
+- CI reads the same JSON from the `ACCOUNT_SNAPSHOT` secret
+
+With a snapshot, risk is sized as a **percentage of the account** (default 2%,
+capped by the flat dollar figure — whichever is smaller wins, so a stale
+snapshot can never inflate risk), share counts are capped by real buying
+power, and alerts show existing holdings plus a concentration warning above
+25% in one name. Position detail goes to Discord only, never the public page.
+
+Without a snapshot, everything still works off the flat budget and says so.
+
+Snapshots go stale. Every alert states the age.
+
 ## Setup
 
 1. Push this repo to GitHub (public = free Actions minutes).

@@ -19,6 +19,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Dict, Optional
 
+from . import account
 from .clock import earnings_blackout, fmt_local, now_market, session_close
 
 HOLD_FIRE = "HOLD_FIRE"
@@ -30,8 +31,9 @@ STALE = "STALE"
 ALERTING_STATES = {BUY_WATCH, BROKEN}
 
 
-def evaluate(cfg: Dict, snap: Optional[Dict], risk: Dict, now=None) -> Dict:
-    """Return the full assessment for one ticker. `now` is injectable for tests."""
+def evaluate(cfg: Dict, snap: Optional[Dict], risk: Dict, now=None,
+             acct: Optional[Dict] = None) -> Dict:
+    """Return the full assessment for one ticker. `now`/`acct` injectable for tests."""
     symbol = cfg["symbol"]
     now = now or now_market()
 
@@ -66,7 +68,7 @@ def evaluate(cfg: Dict, snap: Optional[Dict], risk: Dict, now=None) -> Dict:
 
     ticket = None
     if state == BUY_WATCH:
-        ticket = _build_ticket(cfg, snap, risk, now)
+        ticket = _build_ticket(cfg, snap, risk, now, acct)
     elif state == BROKEN:
         ticket = _build_exit_note(cfg, snap)
 
@@ -97,7 +99,8 @@ def _context(snap: Dict) -> list:
     return out
 
 
-def _build_ticket(cfg: Dict, snap: Dict, risk: Dict, now=None) -> Dict:
+def _build_ticket(cfg: Dict, snap: Dict, risk: Dict, now=None,
+                  acct: Optional[Dict] = None) -> Dict:
     """
     Construct a prepared BUY ticket, or a refusal explaining why not.
 
@@ -145,10 +148,24 @@ def _build_ticket(cfg: Dict, snap: Dict, risk: Dict, now=None) -> Dict:
                         "sits {:.2f} below entry, which is wide for this target".format(
                             rr, risk["min_reward_risk"], extra, stop_kind, risk_per_share))
 
-    shares = int(risk["account_risk_per_trade_usd"] // risk_per_share)
+    budget, budget_note = _risk_budget(risk, acct)
+    shares = int(budget // risk_per_share)
     if shares < 1:
         return _refusal("stop is {:.2f} wide - one share risks more than the "
-                        "{:.0f} budget".format(risk_per_share, risk["account_risk_per_trade_usd"]))
+                        "${:.0f} risk budget{}".format(risk_per_share, budget, budget_note))
+
+    # Cap by what the account can actually pay for. A ticket you cannot fund
+    # is not a plan.
+    cash = account.buying_power(acct)
+    capped_note = ""
+    if cash is not None:
+        affordable = int(cash // price)
+        if affordable < 1:
+            return _refusal("buying power ${:.0f} does not cover one share at "
+                            "${:.2f}".format(cash, price))
+        if affordable < shares:
+            shares = affordable
+            capped_note = " (capped by ${:.0f} buying power)".format(cash)
 
     band_low = round(price - 0.25 * atr14, 2) if atr14 else round(price * 0.995, 2)
     band_high = round(price + 0.25 * atr14, 2) if atr14 else round(price * 1.005, 2)
@@ -179,10 +196,64 @@ def _build_ticket(cfg: Dict, snap: Dict, risk: Dict, now=None) -> Dict:
         "risk_usd": round(shares * risk_per_share, 2),
         "reward_usd": round(shares * reward_per_share, 2),
         "reward_risk": round(rr, 2),
+        "budget_note": budget_note.strip(),
+        "size_note": capped_note.strip(),
+        "position_notes": _position_notes(cfg, snap, acct, shares),
         "expires_at": expires.isoformat(),
         "expires_label": fmt_local(expires),
         "void_if": "price leaves {:.2f}-{:.2f}".format(band_low, band_high),
     }
+
+
+def _risk_budget(risk: Dict, acct: Optional[Dict]):
+    """
+    Dollars to risk on one trade.
+
+    Percent-of-account is the correct unit; the fixed dollar figure is only a
+    fallback for when no snapshot is available. Whichever is SMALLER wins, so
+    a stale snapshot showing a big account can never inflate the risk.
+    """
+    fixed = float(risk.get("account_risk_per_trade_usd", 250))
+    value = account.account_value(acct)
+    if value is None:
+        return fixed, " (no account snapshot - using the flat budget)"
+
+    pct = float(risk.get("account_risk_pct", 2.0))
+    sized = value * pct / 100.0
+    if sized <= fixed:
+        return sized, " ({:.0f}% of ${:.0f})".format(pct, value)
+    return fixed, " (flat cap, below {:.0f}% of ${:.0f})".format(pct, value)
+
+
+def _position_notes(cfg: Dict, snap: Dict, acct: Optional[Dict], shares: int) -> list:
+    """Concentration and existing-holding context. Discord only - never public."""
+    notes = []
+    if not acct:
+        return notes
+
+    held = account.holding(acct, cfg["symbol"])
+    if held:
+        qty = float(held.get("quantity", 0))
+        avg = held.get("average_buy_price")
+        line = "already holding {:g} shares".format(qty)
+        if avg:
+            line += " at ${:.2f} avg".format(float(avg))
+            pnl = (snap["price"] - float(avg)) / float(avg) * 100
+            line += " ({:+.1f}%)".format(pnl)
+        notes.append(line)
+
+    value = account.account_value(acct)
+    if value:
+        new_cost = shares * snap["price"]
+        existing = float(held.get("quantity", 0)) * snap["price"] if held else 0.0
+        pct = (new_cost + existing) / value * 100
+        notes.append("would be {:.0f}% of the ${:.0f} account".format(pct, value))
+        if pct > 25:
+            notes.append("CONCENTRATION: over 25% in one name")
+
+    if acct.get("age_hours") is not None:
+        notes.append("account snapshot is {:.0f}h old".format(acct["age_hours"]))
+    return notes
 
 
 def _sizing_stop(cfg: Dict, price: float, atr14: float, thesis_stop: float, risk: Dict):

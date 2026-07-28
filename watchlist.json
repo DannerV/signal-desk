@@ -1,6 +1,7 @@
 {
   "_comment": "Levels are the contract. reclaim = bullish trigger, invalidation = stop/broken, t1/t2 = upside targets. earnings is the report DATE plus timing (am = before open, pm = after close) and forces HOLD_FIRE through the print.",
   "risk": {
+    "account_risk_pct": 2.0,
     "account_risk_per_trade_usd": 250,
     "min_reward_risk": 1.5,
     "_entry_stop_note": "invalidation = thesis is wrong. entry_stop = where the trade is wrong. sizing uses the tighter of the two; set entry_stop per ticker to override the ATR default.",

@@ -40,6 +40,14 @@ def _post(payload: Dict) -> bool:
         return False
 
 
+def _sizing_lines(ticket: Dict) -> str:
+    """Budget, buying-power cap and position context. Private channel only."""
+    bits = [b for b in (ticket.get("budget_note"), ticket.get("size_note")) if b]
+    lines = ["_{}_".format(" ".join(bits))] if bits else []
+    lines += ["• " + n for n in ticket.get("position_notes", [])]
+    return ("\n".join(lines) + "\n") if lines else ""
+
+
 def send_alert(result: Dict) -> bool:
     """One embed per state change, ticket included when we built one."""
     symbol = result["symbol"]
@@ -65,6 +73,7 @@ def send_alert(result: Dict) -> bool:
                 "stop  ${stop}  ({stop_kind})   target  ${target}\n"
                 "thesis breaks below  ${thesis}\n"
                 "risk  ${risk} → reward  ${reward}   (R:R {rr})\n"
+                "{sizing}"
                 "*expires {expires}*\n"
                 "*voids if {void}*"
             ).format(
@@ -74,6 +83,7 @@ def send_alert(result: Dict) -> bool:
                 thesis=ticket.get("thesis_stop", "—"), target=ticket["target"],
                 risk=ticket["risk_usd"], reward=ticket["reward_usd"],
                 rr=ticket["reward_risk"], expires=ticket["expires_label"],
+                sizing=_sizing_lines(ticket),
                 void=ticket["void_if"],
             ),
             "inline": False,

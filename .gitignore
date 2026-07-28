@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .DS_Store
 .env
+
+# broker snapshot - portfolio data must never enter a public repo
+account.local.json
