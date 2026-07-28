@@ -1,0 +1,66 @@
+name: Signal Desk
+
+on:
+  schedule:
+    # every 5 min during market hours only (13:30-20:00 UTC = 6:30am-1pm PT).
+    # GitHub delays cron under load - expect 5-15 min real cadence, not 5.
+    - cron: "*/5 13-20 * * 1-5"
+    # pre-market digest, 6:25am PT
+    - cron: "25 13 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: "Send full board digest"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: signal-desk
+  cancel-in-progress: false     # never kill a run mid-flight
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4          # cron interval is 5 min; leave headroom
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - name: Self-test the rules engine
+        run: python test_engine.py
+
+      - name: Check levels
+        run: |
+          if [ "${{ github.event.schedule }}" = "25 13 * * 1-5" ] || \
+             [ "${{ inputs.digest }}" = "true" ]; then
+            python check.py --digest
+          else
+            python check.py
+          fi
+        env:
+          DISCORD_WEBHOOK_SIGNALS: ${{ secrets.DISCORD_WEBHOOK_SIGNALS }}
+          TZ_LOCAL: America/Los_Angeles
+
+      - name: Persist state and dashboard
+        run: |
+          git config user.email "desk@bot.local"
+          git config user.name  "signal-desk"
+          git add state/ docs/
+          if ! git diff --staged --quiet; then
+            git commit -m "state update [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || true
+            git push || echo "push failed - next run will retry"
+          else
+            echo "no changes"
+          fi

@@ -1,0 +1,83 @@
+{
+  "_comment": "Levels are the contract. reclaim = bullish trigger, invalidation = stop/broken, t1/t2 = upside targets. earnings is the report DATE plus timing (am = before open, pm = after close) and forces HOLD_FIRE through the print.",
+  "risk": {
+    "account_risk_per_trade_usd": 250,
+    "min_reward_risk": 1.5,
+    "ticket_expiry_minutes": 60,
+    "violent_move_atr": 2.5,
+    "alert_cooldown_hours": 2,
+    "quiet_hours_local": [21, 6]
+  },
+  "tickers": [
+    {
+      "symbol": "BE",
+      "reclaim": 200,
+      "invalidation": 176,
+      "t1": 215,
+      "t2": 250,
+      "earnings": "2026-07-28",
+      "earnings_timing": "pm",
+      "note": "beta 3.73. short-seller report + class-action overhang. 200DMA is the line."
+    },
+    {
+      "symbol": "GOOGL",
+      "reclaim": 345,
+      "invalidation": 305,
+      "t1": 365,
+      "t2": 408,
+      "earnings": null,
+      "earnings_timing": null,
+      "note": "HELD. reported Jul 22. capex guide is the overhang, not demand."
+    },
+    {
+      "symbol": "NBIS",
+      "reclaim": 210,
+      "invalidation": 168,
+      "t1": 227,
+      "t2": 265,
+      "earnings": "2026-08-06",
+      "earnings_timing": "am",
+      "note": "earnings date UNVERIFIED by feed - recheck before Aug 6."
+    },
+    {
+      "symbol": "META",
+      "reclaim": 608,
+      "invalidation": 560,
+      "t1": 638,
+      "t2": 700,
+      "earnings": "2026-07-29",
+      "earnings_timing": "pm",
+      "note": "prints same day as FOMC."
+    },
+    {
+      "symbol": "SOFI",
+      "reclaim": 17.2,
+      "invalidation": 14.9,
+      "t1": 19,
+      "t2": 21.6,
+      "earnings": "2026-07-29",
+      "earnings_timing": "am",
+      "note": "reports BEFORE the open, ~11pct implied move."
+    },
+    {
+      "symbol": "ORLY",
+      "reclaim": 88.37,
+      "invalidation": 82.59,
+      "t1": 93.4,
+      "t2": 100,
+      "earnings": "2026-07-29",
+      "earnings_timing": "pm",
+      "note": "levels hand-tuned from full analysis."
+    },
+    {
+      "symbol": "ORCL",
+      "reclaim": 123,
+      "invalidation": 114.75,
+      "t1": 135,
+      "t2": 150,
+      "earnings": null,
+      "earnings_timing": null,
+      "note": "falling knife. fresh 52wk lows. no earnings until September."
+    }
+  ]
+}
