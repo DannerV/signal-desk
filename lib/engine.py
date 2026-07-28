@@ -242,7 +242,10 @@ def _position_notes(cfg: Dict, snap: Dict, acct: Optional[Dict], shares: int) ->
             line += " ({:+.1f}%)".format(pnl)
         notes.append(line)
 
-    value = account.account_value(acct)
+    # Concentration is measured against EVERYTHING held, not just the sleeve
+    # being traded - otherwise a $500 account looks diversified while the same
+    # name is 30% of the real portfolio next door.
+    value = acct.get("household_value") or account.account_value(acct)
     if value:
         new_cost = shares * snap["price"]
         existing = float(held.get("quantity", 0)) * snap["price"] if held else 0.0
