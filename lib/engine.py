@@ -30,9 +30,10 @@ STALE = "STALE"
 ALERTING_STATES = {BUY_WATCH, BROKEN}
 
 
-def evaluate(cfg: Dict, snap: Optional[Dict], risk: Dict) -> Dict:
-    """Return the full assessment for one ticker."""
+def evaluate(cfg: Dict, snap: Optional[Dict], risk: Dict, now=None) -> Dict:
+    """Return the full assessment for one ticker. `now` is injectable for tests."""
     symbol = cfg["symbol"]
+    now = now or now_market()
 
     if snap is None:
         return {"symbol": symbol, "state": STALE, "reasons": ["no price data this run"],
@@ -43,7 +44,7 @@ def evaluate(cfg: Dict, snap: Optional[Dict], risk: Dict) -> Dict:
     invalidation = cfg.get("invalidation")
     reasons = []
 
-    blackout, why = earnings_blackout(cfg.get("earnings"), cfg.get("earnings_timing"))
+    blackout, why = earnings_blackout(cfg.get("earnings"), cfg.get("earnings_timing"), now)
     if blackout:
         return {"symbol": symbol, "state": HOLD_FIRE, "reasons": [why],
                 "ticket": None, "snap": snap, "cfg": cfg}
@@ -65,7 +66,7 @@ def evaluate(cfg: Dict, snap: Optional[Dict], risk: Dict) -> Dict:
 
     ticket = None
     if state == BUY_WATCH:
-        ticket = _build_ticket(cfg, snap, risk)
+        ticket = _build_ticket(cfg, snap, risk, now)
     elif state == BROKEN:
         ticket = _build_exit_note(cfg, snap)
 
@@ -96,7 +97,7 @@ def _context(snap: Dict) -> list:
     return out
 
 
-def _build_ticket(cfg: Dict, snap: Dict, risk: Dict) -> Dict:
+def _build_ticket(cfg: Dict, snap: Dict, risk: Dict, now=None) -> Dict:
     """
     Construct a prepared BUY ticket, or a refusal explaining why not.
 
@@ -106,6 +107,7 @@ def _build_ticket(cfg: Dict, snap: Dict, risk: Dict) -> Dict:
                          reclaim never happened; it opened past it
       3. reward:risk   - below the floor, the trade isn't worth the stop
     """
+    now = now or now_market()
     price = snap["price"]
     atr14 = snap.get("atr14") or 0.0
     stop = cfg.get("invalidation")
@@ -149,10 +151,17 @@ def _build_ticket(cfg: Dict, snap: Dict, risk: Dict) -> Dict:
     band_low = round(price - 0.25 * atr14, 2) if atr14 else round(price * 0.995, 2)
     band_high = round(price + 0.25 * atr14, 2) if atr14 else round(price * 1.005, 2)
 
+    # A ticket needs a session left to run in. Near or past the close there
+    # is no window to fill it, and an expired-on-arrival ticket reads as
+    # actionable when it isn't.
     expires = min(
-        now_market() + timedelta(minutes=risk["ticket_expiry_minutes"]),
-        session_close(),
+        now + timedelta(minutes=risk["ticket_expiry_minutes"]),
+        session_close(now),
     )
+    minutes_left = (expires - now).total_seconds() / 60
+    if minutes_left < 10:
+        return _refusal("under 10 minutes of session left - no window to work an "
+                        "entry. Re-evaluating at tomorrow's open.")
 
     return {
         "kind": "BUY",
