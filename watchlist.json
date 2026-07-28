@@ -3,6 +3,8 @@
   "risk": {
     "account_risk_per_trade_usd": 250,
     "min_reward_risk": 1.5,
+    "_entry_stop_note": "invalidation = thesis is wrong. entry_stop = where the trade is wrong. sizing uses the tighter of the two; set entry_stop per ticker to override the ATR default.",
+    "entry_stop_atr": 1.0,
     "ticket_expiry_minutes": 60,
     "violent_move_atr": 2.5,
     "alert_cooldown_hours": 2,

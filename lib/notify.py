@@ -62,14 +62,16 @@ def send_alert(result: Dict) -> bool:
             "value": (
                 "**BUY {shares} {symbol}**\n"
                 "limit band  ${band_low} - ${band_high}\n"
-                "stop  ${stop}   target  ${target}\n"
+                "stop  ${stop}  ({stop_kind})   target  ${target}\n"
+                "thesis breaks below  ${thesis}\n"
                 "risk  ${risk} → reward  ${reward}   (R:R {rr})\n"
                 "*expires {expires}*\n"
                 "*voids if {void}*"
             ).format(
                 shares=ticket["shares"], symbol=symbol,
                 band_low=ticket["limit_band"][0], band_high=ticket["limit_band"][1],
-                stop=ticket["stop"], target=ticket["target"],
+                stop=ticket["stop"], stop_kind=ticket.get("stop_kind", "stop"),
+                thesis=ticket.get("thesis_stop", "—"), target=ticket["target"],
                 risk=ticket["risk_usd"], reward=ticket["reward_usd"],
                 rr=ticket["reward_risk"], expires=ticket["expires_label"],
                 void=ticket["void_if"],

@@ -89,10 +89,13 @@ def _card(result: Dict) -> str:
     if t and t.get("valid") and t.get("kind") == "BUY":
         ticket_html = (
             '<div class="ticket"><b>📋 Prepared ticket — approve or deny</b>'
-            "BUY {shares} {sym} · limit ${lo}–${hi} · stop ${stop} · target ${tgt}<br>"
+            "BUY {shares} {sym} · limit ${lo}–${hi} · target ${tgt}<br>"
+            "stop ${stop} ({kind}) · thesis breaks below ${thesis}<br>"
             "risk ${risk} → reward ${rew} (R:R {rr})<br>expires {exp}</div>"
         ).format(shares=t["shares"], sym=symbol, lo=t["limit_band"][0], hi=t["limit_band"][1],
-                 stop=t["stop"], tgt=t["target"], risk=t["risk_usd"], rew=t["reward_usd"],
+                 stop=t["stop"], kind=html.escape(t.get("stop_kind", "stop")),
+                 thesis=t.get("thesis_stop", "—"), tgt=t["target"],
+                 risk=t["risk_usd"], rew=t["reward_usd"],
                  rr=t["reward_risk"], exp=html.escape(t["expires_label"]))
 
     reasons = "".join("<li>{}</li>".format(html.escape(r)) for r in result["reasons"])
